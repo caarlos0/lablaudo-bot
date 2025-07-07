@@ -19,6 +19,7 @@ A Telegram bot that monitors lab results at https://lablaudo.com.br/acesso_pacie
 ## Quick Start (Executable Binary)
 
 ### Download and Run
+
 ```bash
 # Download the latest release (or build from source)
 wget https://github.com/your-repo/lablaudo/releases/latest/download/lablaudo
@@ -31,6 +32,7 @@ TELEGRAM_BOT_TOKEN=your_bot_token_here ./lablaudo
 ```
 
 ### Build from Source
+
 ```bash
 # Clone repository
 git clone https://github.com/your-repo/lablaudo.git
@@ -46,17 +48,20 @@ TELEGRAM_BOT_TOKEN=your_token ./dist/lablaudo
 ## Development Setup
 
 1. Create and activate virtual environment:
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
 2. Install dependencies:
+
 ```bash
 pip install -e .
 ```
 
 3. Run in development mode:
+
 ```bash
 export TELEGRAM_BOT_TOKEN=your_bot_token_here
 python3 main.py
@@ -73,7 +78,7 @@ python3 main.py
 
 - `/start` - Welcome message and setup instructions
 - `/add` - Add your lab portal credentials
-- `/remove` - Remove your stored credentials  
+- `/remove` - Remove your stored credentials
 - `/check` - Check your results immediately
 - `/status` - Show your monitoring status
 - `/help` - Show help message
@@ -90,49 +95,7 @@ python3 main.py
 8. **Auto-cleanup**: Removes user from monitoring after successful PDF delivery
 9. **Periodic Monitoring**: Continues checking every 30 minutes for remaining users
 
-## Binary Distribution
-
-### Features
-- **Self-contained**: Includes Python runtime and all dependencies
-- **No installation required**: Just download and run
-- **Cross-platform**: Available for macOS, Linux, and Windows
-- **Small size**: ~12MB executable
-- **Fast startup**: Optimized for quick bot initialization
-
-### System Requirements
-- **macOS**: 10.14+ (arm64/x86_64)
-- **Linux**: glibc 2.17+ (x86_64/arm64)
-- **Windows**: Windows 10+ (x86_64)
-
 ### Deployment Options
-
-#### As a systemd service (Linux):
-```bash
-sudo cp lablaudo /usr/local/bin/
-sudo tee /etc/systemd/system/lablaudo.service > /dev/null <<EOF
-[Unit]
-Description=Lab Results Monitor Bot
-After=network.target
-
-[Service]
-Type=simple
-Environment=TELEGRAM_BOT_TOKEN=your_token_here
-ExecStart=/usr/local/bin/lablaudo
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl enable lablaudo
-sudo systemctl start lablaudo
-```
-
-#### As a launchd daemon (macOS):
-```bash
-sudo cp lablaudo /usr/local/bin/
-# See BUILD.md for complete launchd setup
-```
 
 ## Database Schema
 
@@ -167,15 +130,9 @@ CREATE TABLE users (
 ## Development
 
 ### Run tests:
+
 ```bash
 source venv/bin/activate
 python3 test_bot.py
 python3 test_pdf.py
 ```
-
-### Build executable:
-```bash
-python build.py
-```
-
-See [BUILD.md](BUILD.md) for detailed build and deployment instructions.
