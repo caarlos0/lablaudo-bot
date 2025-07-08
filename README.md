@@ -1,3 +1,7 @@
+100% vibe coded btw
+
+---
+
 # Lab Results Monitor
 
 A Telegram bot that monitors lab results at https://lablaudo.com.br/acesso_paciente and provides notifications when results are ready. Available as both a Python application and a standalone executable binary.
@@ -29,20 +33,6 @@ chmod +x lablaudo
 
 # Run with your bot token
 TELEGRAM_BOT_TOKEN=your_bot_token_here ./lablaudo
-```
-
-### Build from Source
-
-```bash
-# Clone repository
-git clone https://github.com/your-repo/lablaudo.git
-cd lablaudo
-
-# Build executable (requires UV)
-python build.py
-
-# Run
-TELEGRAM_BOT_TOKEN=your_token ./dist/lablaudo
 ```
 
 ## Development Setup
