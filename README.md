@@ -24,13 +24,21 @@ A Telegram bot that monitors lab results at https://lablaudo.com.br/acesso_pacie
 docker run -e TELEGRAM_BOT_TOKEN=your_token ghcr.io/caarlos0/lablaudo
 ```
 
-## Development Setup
+## Development
+
+```bash
+# Install dependencies
+uv sync
+
+# Run
+TELEGRAM_BOT_TOKEN=your_token uv run -m lablaudo
+
+# Test
+uv run python -m pytest
 
 # Build wheel
-
 uv build
-
-````
+```
 
 ## Usage
 
@@ -67,4 +75,4 @@ Releases are automated with [GoReleaser](https://goreleaser.com). It builds the 
 
 ```bash
 goreleaser release --snapshot --clean
-````
+```
