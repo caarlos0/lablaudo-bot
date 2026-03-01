@@ -13,6 +13,7 @@
 ## Environment Variables
 
 - **TELEGRAM_BOT_TOKEN**: Bot token from @BotFather (required)
+- **DATA_DIR**: Directory for storing the SQLite database (default: `.`, Docker default: `/data`)
 
 ## Bot Commands
 
@@ -39,7 +40,8 @@
 
 - **Image**: `ghcr.io/caarlos0/lablaudo`
 - **Base**: `ghcr.io/astral-sh/uv:python3.13-trixie-slim`
-- **Run**: `docker run -e TELEGRAM_BOT_TOKEN=your_token ghcr.io/caarlos0/lablaudo`
+- **Volume**: `/data` (stores `lablaudo.db`)
+- **Run**: `docker run -v lablaudo-data:/data -e TELEGRAM_BOT_TOKEN=your_token ghcr.io/caarlos0/lablaudo`
 
 ## Code Style
 
@@ -63,4 +65,4 @@
 - Tests: `test_*.py` at project root
 - Build: `pyproject.toml` with hatchling backend
 - Docker: `Dockerfile`
-- SQLite database: `lablaudo.db` (created at runtime)
+- SQLite database: `lablaudo.db` (created at runtime in `DATA_DIR`)

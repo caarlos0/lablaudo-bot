@@ -31,12 +31,19 @@ def escape_md(text: str) -> str:
     return _MD2_ESCAPE_RE.sub(r'\\\1', str(text))
 
 
+def _resolve_db_path() -> str:
+    """Resolve the database path from DATA_DIR env var."""
+    data_dir = os.environ.get("DATA_DIR", ".")
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, "lablaudo.db")
+
+
 class LabBot:
     """Telegram bot for monitoring lab results."""
     
     def __init__(self, token: str):
         self.token = token
-        self.db = Database()
+        self.db = Database(_resolve_db_path())
         self.scheduler = AsyncIOScheduler()
         self.application = Application.builder().token(token).build()
         self.setup_handlers()
