@@ -36,7 +36,7 @@ dockers_v2:
       org.opencontainers.image.name: "{{.ProjectName}}"
       org.opencontainers.image.revision: "{{.FullCommit}}"
       org.opencontainers.image.version: "{{.Version}}"
-      org.opencontainers.image.source: "https://github.com/caarlos0/lablaudo"
+      org.opencontainers.image.source: "https://github.com/caarlos0/lablaudo-bot"
       org.opencontainers.image.description: "Telegram bot for lab results monitoring"
     annotations:
       "org.opencontainers.image.description": "Telegram bot for lab results monitoring"
