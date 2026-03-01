@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 """Test script to verify the crawler setup."""
 
-import sys
-import os
-
-# Add current directory to path to import crawler
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from crawler import LabCrawler
+from lablaudo.crawler import LabCrawler
 
 
 def test_crawler_initialization():

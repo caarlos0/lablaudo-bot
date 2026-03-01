@@ -3,8 +3,8 @@
 
 import asyncio
 import os
-from bot import LabBot
-from database import Database
+from lablaudo.bot import LabBot
+from lablaudo.database import Database
 
 
 async def test_bot_components():

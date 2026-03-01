@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
 """Lab results monitor - Telegram bot."""
 
 import asyncio
-from bot import main as bot_main
+
+from lablaudo.bot import main as bot_main
 
 
 def main():
-    """Main function - run Telegram bot."""
+    """Entry point for script console."""
     asyncio.run(bot_main())
 
 

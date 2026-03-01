@@ -9,8 +9,8 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from database import Database
-from crawler import LabCrawler
+from lablaudo.database import Database
+from lablaudo.crawler import LabCrawler
 
 
 # Configure logging
@@ -85,64 +85,46 @@ class LabBot:
         )
         await update.message.reply_text(help_text)
     
-    async def add_credentials(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Start the process of adding credentials."""
-        await update.message.reply_text(
-            "Please send your credentials in this format:\n"
-            "username password\n\n"
-            "Example: 12345678 ABC123DEF\n\n"
-            "You can add multiple credentials by sending /add again."
-        )
-        context.chat_data['waiting_for_credentials'] = True
-    
-    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle text messages (credentials input)."""
-        if context.chat_data.get('waiting_for_credentials'):
-            try:
-                parts = update.message.text.strip().split()
-                if len(parts) != 2:
-                    await update.message.reply_text(
-                        "Please send your credentials in this format:\n"
-                        "username password"
-                    )
-                    return
-                
-                username, password = parts
-                chat_id = update.effective_chat.id
-                
-                await update.message.reply_text("Testing your credentials...")
-                
-                crawler = LabCrawler()
-                if crawler.login(username, password):
-                    if self.db.add_credential(chat_id, username, password):
-                        creds = self.db.get_credentials(chat_id)
-                        count = len(creds)
-                        await update.message.reply_text(
-                            f"✅ Credentials saved! You now have {count} credential(s) being monitored.\n"
-                            "I'll check your results every 30 minutes and notify you when they're ready.\n\n"
-                            "Use /add again to add more, or /status to see all."
-                        )
-                    else:
-                        await update.message.reply_text(
-                            "❌ Failed to save credentials. Please try again."
-                        )
-                else:
-                    await update.message.reply_text(
-                        "❌ Login failed. Please check your credentials and try again."
-                    )
-                
-                context.chat_data['waiting_for_credentials'] = False
-                
-            except Exception as e:
-                logger.error(f"Error processing credentials: {e}")
+    async def _save_credentials(self, update: Update, username: str, password: str):
+        """Validate and save credentials."""
+        chat_id = update.effective_chat.id
+        await update.message.reply_text("Testing your credentials...")
+        
+        crawler = LabCrawler()
+        if crawler.login(username, password):
+            if self.db.add_credential(chat_id, username, password):
+                creds = self.db.get_credentials(chat_id)
+                count = len(creds)
                 await update.message.reply_text(
-                    "❌ Error processing credentials. Please try again."
+                    f"✅ Credentials saved! You now have {count} credential(s) being monitored.\n"
+                    "I'll check your results every 30 minutes and notify you when they're ready.\n\n"
+                    "Use /add again to add more, or /status to see all."
                 )
-                context.chat_data['waiting_for_credentials'] = False
+            else:
+                await update.message.reply_text(
+                    "❌ Failed to save credentials. Please try again."
+                )
         else:
             await update.message.reply_text(
-                "Use /help to see available commands."
+                "❌ Login failed. Please check your credentials and try again."
             )
+    
+    async def add_credentials(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Add credentials. Usage: /add username password"""
+        if context.args and len(context.args) == 2:
+            await self._save_credentials(update, context.args[0], context.args[1])
+            return
+        
+        await update.message.reply_text(
+            "Usage: /add username password\n\n"
+            "Example: /add 12345678 ABC123DEF"
+        )
+    
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle text messages."""
+        await update.message.reply_text(
+            "Use /help to see available commands."
+        )
     
     async def remove_credentials(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove user credentials."""
