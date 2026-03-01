@@ -51,8 +51,7 @@ uv build
 
 - `/start` - Welcome message and setup instructions
 - `/add` - Add your lab portal credentials (supports multiple)
-- `/remove` - Remove stored credentials
-- `/remove_all` - Remove all stored credentials
+- `/remove <username>` - Remove credentials by username
 - `/check` - Check your results immediately
 - `/status` - Show your monitoring status
 - `/help` - Show help message

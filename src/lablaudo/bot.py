@@ -47,14 +47,8 @@ class LabBot:
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("add", self.add_credentials))
         self.application.add_handler(CommandHandler("remove", self.remove_credentials))
-        self.application.add_handler(CommandHandler("remove_all", self.remove_all_credentials))
         self.application.add_handler(CommandHandler("check", self.check_now))
         self.application.add_handler(CommandHandler("status", self.status))
-        
-        # Handle /remove_<id> commands
-        self.application.add_handler(
-            MessageHandler(filters.Regex(r'^/remove_\d+'), self.remove_single_credential)
-        )
         
         # Handle text messages for credential input
         self.application.add_handler(
@@ -69,7 +63,7 @@ class LabBot:
             "and notify you when they're ready\\!\n\n"
             "*Commands:*\n"
             "/add \\- Add lab credentials\n"
-            "/remove \\- Remove credentials\n"
+            "/remove \\- Remove credentials by username\n"
             "/check \\- Check results now\n"
             "/status \\- Show current status\n"
             "/help \\- Show this help message\n\n"
@@ -83,7 +77,7 @@ class LabBot:
         help_text = (
             "*Available Commands:*\n\n"
             "/add \\- Add lab portal credentials \\(can add multiple\\)\n"
-            "/remove \\- Remove stored credentials\n"
+            "/remove \\- Remove credentials by username\n"
             "/check \\- Check all your results immediately\n"
             "/status \\- Show your monitoring status\n"
             "/help \\- Show this help message\n\n"
@@ -147,81 +141,32 @@ class LabBot:
         )
     
     async def remove_credentials(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Remove user credentials."""
+        """Remove credentials by username. Usage: /remove username"""
         chat_id = update.effective_chat.id
-        creds = self.db.get_credentials(chat_id)
-        
-        if not creds:
-            await update.message.reply_text(
-                "❌ No credentials found to remove\\.",
-                parse_mode=ParseMode.MARKDOWN_V2,
-            )
-            return
-        
-        if len(creds) == 1:
-            cred_id, username, _ = creds[0]
-            if self.db.remove_credential(chat_id, cred_id):
+
+        if not context.args or len(context.args) != 1:
+            creds = self.db.get_credentials(chat_id)
+            if not creds:
                 await update.message.reply_text(
-                    f"✅ Credentials for {escape_md(username)} removed\\.",
+                    "❌ No credentials found to remove\\.",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
-            else:
-                await update.message.reply_text(
-                    "❌ Failed to remove credentials\\.",
-                    parse_mode=ParseMode.MARKDOWN_V2,
-                )
+                return
+            msg = "Usage: `/remove username`\n\nYour credentials:\n"
+            for _, username, _ in creds:
+                msg += f"  `{escape_md(username)}`\n"
+            await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
             return
-        
-        msg = "Which credentials do you want to remove?\n\n"
-        for cred_id, username, _ in creds:
-            msg += f"  /remove\\_{escape_md(cred_id)} — {escape_md(username)}\n"
-        msg += "\n/remove\\_all — Remove all"
-        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
-    
-    async def remove_single_credential(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Remove a single credential by id from /remove_<id> command."""
-        chat_id = update.effective_chat.id
-        text = update.message.text.strip()
-        match = re.search(r'/remove_(\d+)', text)
-        if not match:
-            await update.message.reply_text(
-                "❌ Invalid command format\\.",
-                parse_mode=ParseMode.MARKDOWN_V2,
-            )
-            return
-        
-        cred_id = int(match.group(1))
-        cred = self.db.get_credential_by_id(cred_id)
-        if not cred or cred[0] != chat_id:
-            await update.message.reply_text(
-                "❌ Credential not found\\.",
-                parse_mode=ParseMode.MARKDOWN_V2,
-            )
-            return
-        
-        _, username, _ = cred
-        if self.db.remove_credential(chat_id, cred_id):
+
+        username = context.args[0]
+        if self.db.remove_credential_by_username(chat_id, username):
             await update.message.reply_text(
                 f"✅ Credentials for {escape_md(username)} removed\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         else:
             await update.message.reply_text(
-                "❌ Failed to remove credentials\\.",
-                parse_mode=ParseMode.MARKDOWN_V2,
-            )
-    
-    async def remove_all_credentials(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Remove all credentials for a chat."""
-        chat_id = update.effective_chat.id
-        if self.db.remove_all_credentials(chat_id):
-            await update.message.reply_text(
-                "✅ All credentials removed\\. You'll no longer receive notifications\\.",
-                parse_mode=ParseMode.MARKDOWN_V2,
-            )
-        else:
-            await update.message.reply_text(
-                "❌ No credentials found to remove\\.",
+                "❌ Credential not found\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
     

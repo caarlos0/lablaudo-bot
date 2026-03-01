@@ -86,19 +86,20 @@ class Database:
                 return cursor.rowcount > 0
         except sqlite3.Error:
             return False
-    
-    def remove_all_credentials(self, chat_id: int) -> bool:
-        """Remove all credentials for a chat."""
+
+    def remove_credential_by_username(self, chat_id: int, username: str) -> bool:
+        """Remove a credential by username."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.execute(
-                    "DELETE FROM credentials WHERE chat_id = ?",
-                    (chat_id,)
+                    "DELETE FROM credentials WHERE chat_id = ? AND username = ?",
+                    (chat_id, username)
                 )
                 conn.commit()
                 return cursor.rowcount > 0
         except sqlite3.Error:
             return False
+    
     
     def get_credentials(self, chat_id: int) -> List[Tuple[int, str, str]]:
         """Get all active credentials for a chat. Returns list of (id, username, password)."""
