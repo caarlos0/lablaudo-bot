@@ -53,77 +53,69 @@ class LabBot:
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send welcome message."""
-        welcome_text = """
-🧪 **Lab Results Monitor Bot**
-
-I can monitor your lab results at lablaudo.com.br and notify you when they're ready!
-
-**Commands:**
-/add - Add lab credentials
-/remove - Remove credentials
-/check - Check results now
-/status - Show your current status
-/help - Show this help message
-
-Use /add to get started! You can add multiple credentials to monitor several results at once.
-        """
-        await update.message.reply_text(welcome_text, parse_mode='Markdown')
+        welcome_text = (
+            "🧪 Lab Results Monitor Bot\n\n"
+            "I can monitor your lab results at lablaudo.com.br and notify you when they're ready!\n\n"
+            "Commands:\n"
+            "/add - Add lab credentials\n"
+            "/remove - Remove credentials\n"
+            "/check - Check results now\n"
+            "/status - Show current status\n"
+            "/help - Show this help message\n\n"
+            "Use /add to get started! You can add multiple credentials to monitor several results at once."
+        )
+        await update.message.reply_text(welcome_text)
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send help message."""
-        help_text = """
-**Available Commands:**
-
-/add - Add lab portal credentials (can add multiple)
-/remove - Remove stored credentials
-/check - Check all your results immediately
-/status - Show your monitoring status
-/help - Show this help message
-
-**How it works:**
-1. Use /add to store your lab portal credentials
-2. You can add multiple credentials for different results
-3. I'll check all your results every 30 minutes
-4. You'll get notified when results are ready (green status)
-5. Each credential is removed automatically after its PDF is delivered
-
-**Privacy:** Your credentials are stored securely and only used to check your results.
-        """
-        await update.message.reply_text(help_text, parse_mode='Markdown')
+        help_text = (
+            "Available Commands:\n\n"
+            "/add - Add lab portal credentials (can add multiple)\n"
+            "/remove - Remove stored credentials\n"
+            "/check - Check all your results immediately\n"
+            "/status - Show your monitoring status\n"
+            "/help - Show this help message\n\n"
+            "How it works:\n"
+            "1. Use /add to store your lab portal credentials\n"
+            "2. You can add multiple credentials for different results\n"
+            "3. I'll check all your results every 30 minutes\n"
+            "4. You'll get notified when results are ready (green status)\n"
+            "5. Each credential is removed automatically after its PDF is delivered\n\n"
+            "Privacy: Your credentials are stored securely and only used to check your results."
+        )
+        await update.message.reply_text(help_text)
     
     async def add_credentials(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start the process of adding credentials."""
         await update.message.reply_text(
             "Please send your credentials in this format:\n"
-            "`username password`\n\n"
-            "Example: `12345678 ABC123DEF`\n\n"
-            "You can add multiple credentials by sending /add again.",
-            parse_mode='Markdown'
+            "username password\n\n"
+            "Example: 12345678 ABC123DEF\n\n"
+            "You can add multiple credentials by sending /add again."
         )
-        context.user_data['waiting_for_credentials'] = True
+        context.chat_data['waiting_for_credentials'] = True
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages (credentials input)."""
-        if context.user_data.get('waiting_for_credentials'):
+        if context.chat_data.get('waiting_for_credentials'):
             try:
                 parts = update.message.text.strip().split()
                 if len(parts) != 2:
                     await update.message.reply_text(
                         "Please send your credentials in this format:\n"
-                        "`username password`",
-                        parse_mode='Markdown'
+                        "username password"
                     )
                     return
                 
                 username, password = parts
-                telegram_id = update.effective_user.id
+                chat_id = update.effective_chat.id
                 
                 await update.message.reply_text("Testing your credentials...")
                 
                 crawler = LabCrawler()
                 if crawler.login(username, password):
-                    if self.db.add_credential(telegram_id, username, password):
-                        creds = self.db.get_credentials(telegram_id)
+                    if self.db.add_credential(chat_id, username, password):
+                        creds = self.db.get_credentials(chat_id)
                         count = len(creds)
                         await update.message.reply_text(
                             f"✅ Credentials saved! You now have {count} credential(s) being monitored.\n"
@@ -139,14 +131,14 @@ Use /add to get started! You can add multiple credentials to monitor several res
                         "❌ Login failed. Please check your credentials and try again."
                     )
                 
-                context.user_data['waiting_for_credentials'] = False
+                context.chat_data['waiting_for_credentials'] = False
                 
             except Exception as e:
                 logger.error(f"Error processing credentials: {e}")
                 await update.message.reply_text(
                     "❌ Error processing credentials. Please try again."
                 )
-                context.user_data['waiting_for_credentials'] = False
+                context.chat_data['waiting_for_credentials'] = False
         else:
             await update.message.reply_text(
                 "Use /help to see available commands."
@@ -154,8 +146,8 @@ Use /add to get started! You can add multiple credentials to monitor several res
     
     async def remove_credentials(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove user credentials."""
-        telegram_id = update.effective_user.id
-        creds = self.db.get_credentials(telegram_id)
+        chat_id = update.effective_chat.id
+        creds = self.db.get_credentials(chat_id)
         
         if not creds:
             await update.message.reply_text(
@@ -165,10 +157,9 @@ Use /add to get started! You can add multiple credentials to monitor several res
         
         if len(creds) == 1:
             cred_id, username, _ = creds[0]
-            if self.db.remove_credential(telegram_id, cred_id):
+            if self.db.remove_credential(chat_id, cred_id):
                 await update.message.reply_text(
-                    f"✅ Credentials for `{username}` removed.",
-                    parse_mode='Markdown'
+                    f"✅ Credentials for {username} removed."
                 )
             else:
                 await update.message.reply_text("❌ Failed to remove credentials.")
@@ -177,13 +168,13 @@ Use /add to get started! You can add multiple credentials to monitor several res
         # Multiple credentials - ask which to remove
         msg = "Which credentials do you want to remove?\n\n"
         for cred_id, username, _ in creds:
-            msg += f"  /remove\\_{cred_id} — `{username}`\n"
-        msg += "\n/remove\\_all — Remove all"
-        await update.message.reply_text(msg, parse_mode='Markdown')
+            msg += f"  /remove_{cred_id} — {username}\n"
+        msg += "\n/remove_all — Remove all"
+        await update.message.reply_text(msg)
     
     async def remove_single_credential(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Remove a single credential by id from /remove_<id> command."""
-        telegram_id = update.effective_user.id
+        chat_id = update.effective_chat.id
         text = update.message.text.strip()
         match = re.search(r'/remove_(\d+)', text)
         if not match:
@@ -192,23 +183,20 @@ Use /add to get started! You can add multiple credentials to monitor several res
         
         cred_id = int(match.group(1))
         cred = self.db.get_credential_by_id(cred_id)
-        if not cred or cred[0] != telegram_id:
+        if not cred or cred[0] != chat_id:
             await update.message.reply_text("❌ Credential not found.")
             return
         
         _, username, _ = cred
-        if self.db.remove_credential(telegram_id, cred_id):
-            await update.message.reply_text(
-                f"✅ Credentials for `{username}` removed.",
-                parse_mode='Markdown'
-            )
+        if self.db.remove_credential(chat_id, cred_id):
+            await update.message.reply_text(f"✅ Credentials for {username} removed.")
         else:
             await update.message.reply_text("❌ Failed to remove credentials.")
     
     async def remove_all_credentials(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Remove all credentials for a user."""
-        telegram_id = update.effective_user.id
-        if self.db.remove_all_credentials(telegram_id):
+        """Remove all credentials for a chat."""
+        chat_id = update.effective_chat.id
+        if self.db.remove_all_credentials(chat_id):
             await update.message.reply_text(
                 "✅ All credentials removed. You'll no longer receive notifications."
             )
@@ -217,7 +205,7 @@ Use /add to get started! You can add multiple credentials to monitor several res
     
     async def _check_single_credential(
         self,
-        telegram_id: int,
+        chat_id: int,
         cred_id: int,
         username: str,
         password: str,
@@ -226,7 +214,7 @@ Use /add to get started! You can add multiple credentials to monitor several res
         label: str = "",
     ):
         """Check results for a single credential. Returns status string."""
-        prefix = f"[`{username}`] " if label else ""
+        prefix = f"[{username}] " if label else ""
         try:
             crawler = LabCrawler()
             if crawler.login(username, password):
@@ -239,23 +227,20 @@ Use /add to get started! You can add multiple credentials to monitor several res
                             await send_document(
                                 document=pdf_content,
                                 filename=filename,
-                                caption=f"🎉 {prefix}**Lab Results Ready!**\n\nYour lab results are attached.",
-                                parse_mode='Markdown'
+                                caption=f"🎉 {prefix}Lab Results Ready!\n\nYour lab results are attached.",
                             )
-                            self.db.remove_credential(telegram_id, cred_id)
-                            logger.info(f"Delivered PDF for credential {cred_id} (user {telegram_id}) and removed")
+                            self.db.remove_credential(chat_id, cred_id)
+                            logger.info(f"Delivered PDF for credential {cred_id} (chat {chat_id}) and removed")
                             return "results_delivered"
                         else:
                             await send_message(
-                                f"🎉 {prefix}**Lab Results Ready!**\n\n"
+                                f"🎉 {prefix}Lab Results Ready!\n\n"
                                 "Results available on the portal, but I couldn't download the PDF.",
-                                parse_mode='Markdown'
                             )
                     else:
                         await send_message(
-                            f"🎉 {prefix}**Lab Results Ready!**\n\n"
+                            f"🎉 {prefix}Lab Results Ready!\n\n"
                             "Your results are available on the portal.",
-                            parse_mode='Markdown'
                         )
                     self.db.update_credential_status(cred_id, "results_ready")
                     return "results_ready"
@@ -266,13 +251,13 @@ Use /add to get started! You can add multiple credentials to monitor several res
                 self.db.update_credential_status(cred_id, "login_failed")
                 return "login_failed"
         except Exception as e:
-            logger.error(f"Error checking credential {cred_id} for user {telegram_id}: {e}")
+            logger.error(f"Error checking credential {cred_id} for chat {chat_id}: {e}")
             return "error"
     
     async def check_now(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Check results immediately for all user credentials."""
-        telegram_id = update.effective_user.id
-        creds = self.db.get_credentials(telegram_id)
+        """Check results immediately for all credentials in this chat."""
+        chat_id = update.effective_chat.id
+        creds = self.db.get_credentials(chat_id)
         
         if not creds:
             await update.message.reply_text(
@@ -290,7 +275,7 @@ Use /add to get started! You can add multiple credentials to monitor several res
         error_count = 0
         for cred_id, username, password in creds:
             status = await self._check_single_credential(
-                telegram_id, cred_id, username, password,
+                chat_id, cred_id, username, password,
                 send_message=lambda text, **kw: update.message.reply_text(text, **kw),
                 send_document=lambda **kw: update.message.reply_document(**kw),
                 label=username if multi else "",
@@ -299,14 +284,15 @@ Use /add to get started! You can add multiple credentials to monitor several res
                 pending_count += 1
             elif status == "login_failed":
                 error_count += 1
+                prefix = f"[{username}] " if multi else ""
                 await update.message.reply_text(
-                    f"❌ {'[`' + username + '`] ' if multi else ''}Login failed. Check credentials with /add",
-                    parse_mode='Markdown'
+                    f"❌ {prefix}Login failed. Check credentials with /add"
                 )
             elif status == "error":
                 error_count += 1
+                prefix = f"[{username}] " if multi else ""
                 await update.message.reply_text(
-                    f"❌ {'[`' + username + '`] ' if multi else ''}Error checking results."
+                    f"❌ {prefix}Error checking results."
                 )
         
         if pending_count > 0:
@@ -315,9 +301,9 @@ Use /add to get started! You can add multiple credentials to monitor several res
             )
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Show user's monitoring status."""
-        telegram_id = update.effective_user.id
-        statuses = self.db.get_credential_statuses(telegram_id)
+        """Show monitoring status for this chat."""
+        chat_id = update.effective_chat.id
+        statuses = self.db.get_credential_statuses(chat_id)
         
         if not statuses:
             await update.message.reply_text(
@@ -339,28 +325,27 @@ Use /add to get started! You can add multiple credentials to monitor several res
         logger.info("Starting periodic check for all credentials")
         all_creds = self.db.get_all_active_credentials()
         
-        for cred_id, telegram_id, username, password in all_creds:
-            async def send_message(text, _tid=telegram_id, **kwargs):
-                await self.application.bot.send_message(chat_id=_tid, text=text, **kwargs)
+        for cred_id, chat_id, username, password in all_creds:
+            async def send_message(text, _cid=chat_id, **kwargs):
+                await self.application.bot.send_message(chat_id=_cid, text=text, **kwargs)
             
-            async def send_document(_tid=telegram_id, **kwargs):
-                await self.application.bot.send_document(chat_id=_tid, **kwargs)
+            async def send_document(_cid=chat_id, **kwargs):
+                await self.application.bot.send_document(chat_id=_cid, **kwargs)
             
             status = await self._check_single_credential(
-                telegram_id, cred_id, username, password,
+                chat_id, cred_id, username, password,
                 send_message=send_message,
                 send_document=send_document,
                 label=username,
             )
             if status == "login_failed":
                 await self.application.bot.send_message(
-                    chat_id=telegram_id,
-                    text=f"❌ [`{username}`] **Login Failed**\n\n"
+                    chat_id=chat_id,
+                    text=f"❌ [{username}] Login Failed\n\n"
                          "I couldn't log into this account. Check credentials with /add",
-                    parse_mode='Markdown'
                 )
             elif status == "results_pending":
-                logger.info(f"Credential {cred_id} (user {telegram_id}) - results still pending")
+                logger.info(f"Credential {cred_id} (chat {chat_id}) - results still pending")
         
         logger.info("Completed periodic check for all credentials")
     
