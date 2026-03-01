@@ -7,7 +7,10 @@ from lablaudo.bot import main as bot_main
 
 def main():
     """Entry point for script console."""
-    asyncio.run(bot_main())
+    try:
+        asyncio.run(bot_main())
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

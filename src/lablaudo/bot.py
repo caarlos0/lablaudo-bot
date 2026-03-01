@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Telegram bot for lab results monitoring."""
 
+import asyncio
 import os
 import re
+import signal
 import logging
 
 from telegram import Update
@@ -417,17 +419,22 @@ class LabBot:
         
         logger.info("Bot is running...")
         
+        stop_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop_event.set)
+
         try:
-            import asyncio
-            while True:
-                await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            logger.info("Received interrupt signal, shutting down...")
-        finally:
-            await self.application.updater.stop()
-            await self.application.stop()
-            await self.application.shutdown()
-            self.scheduler.shutdown()
+            await stop_event.wait()
+        except asyncio.CancelledError:
+            pass
+        
+        logger.info("Shutting down...")
+        await self.application.updater.stop()
+        await self.application.stop()
+        await self.application.shutdown()
+        self.scheduler.shutdown()
+        logger.info("Shutdown complete.")
 
 
 async def main():
@@ -445,4 +452,7 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
