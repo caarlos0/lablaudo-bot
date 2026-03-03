@@ -1,9 +1,25 @@
 #!/usr/bin/env python3
 """Lab results crawler for patient portal."""
 
+import re
 import requests
 from bs4 import BeautifulSoup
-from typing import Optional, Tuple
+from datetime import datetime
+from typing import List, Optional, Tuple
+from dataclasses import dataclass
+
+
+@dataclass
+class ExamDetail:
+    """Details of a single exam from the results page."""
+    name: str
+    status: str
+    expected_date: Optional[datetime] = None
+
+
+_PREVISAO_RE = re.compile(
+    r'Previs[aã]o de entrega:\s*(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2})'
+)
 
 
 class LabCrawler:
@@ -188,6 +204,54 @@ class LabCrawler:
             
         except requests.RequestException:
             return False
+    
+    def get_exam_details(self) -> List[ExamDetail]:
+        """Extract exam details including expected delivery dates from results page."""
+        try:
+            if self.results_url:
+                response = self.session.get(self.results_url)
+            else:
+                response = self.session.get(self.login_url)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            exams: List[ExamDetail] = []
+
+            # Find the "Exames do Laudo" table only, skip "Laudos de médicos" etc.
+            exam_table = None
+            for caption in soup.find_all('caption'):
+                if 'exames' in caption.get_text().lower():
+                    exam_table = caption.find_next('table')
+                    break
+
+            if not exam_table:
+                return exams
+
+            for row in exam_table.find_all('tr'):
+                cells = row.find_all('td')
+                if len(cells) < 2:
+                    continue
+
+                name = cells[0].get_text().strip()
+                status_cell = cells[1]
+                status_div = status_cell.find('div')
+                status = status_div.get_text().strip() if status_div else status_cell.get_text().strip()
+
+                expected_date: Optional[datetime] = None
+                label = status_cell.find('label')
+                if label:
+                    match = _PREVISAO_RE.search(label.get_text())
+                    if match:
+                        try:
+                            expected_date = datetime.strptime(match.group(1), '%d/%m/%Y %H:%M')
+                        except ValueError:
+                            pass
+
+                exams.append(ExamDetail(name=name, status=status, expected_date=expected_date))
+
+            return exams
+        except requests.RequestException:
+            return []
     
     def get_pdf_link(self) -> Optional[str]:
         """Get the PDF download link from the results page."""

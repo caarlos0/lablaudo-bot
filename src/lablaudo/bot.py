@@ -6,6 +6,7 @@ import os
 import re
 import signal
 import logging
+from datetime import datetime
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -13,7 +14,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from lablaudo.database import Database
-from lablaudo.crawler import LabCrawler
+from lablaudo.crawler import LabCrawler, ExamDetail
 
 
 # Configure logging
@@ -36,6 +37,48 @@ def _resolve_db_path() -> str:
     data_dir = os.environ.get("DATA_DIR", ".")
     os.makedirs(data_dir, exist_ok=True)
     return os.path.join(data_dir, "lablaudo.db")
+
+
+def _exams_to_dicts(exams: list[ExamDetail]) -> list[dict]:
+    """Convert ExamDetail list to dicts for DB storage."""
+    return [
+        {
+            "name": e.name,
+            "status": e.status,
+            "expected_date": e.expected_date.strftime('%d/%m/%Y %H:%M') if e.expected_date else None,
+        }
+        for e in exams
+    ]
+
+
+def _format_exams_md(exams_rows: list[tuple], now: datetime | None = None, max_shown: int = 3) -> str:
+    """Format exam rows (name, status, expected_date) as MarkdownV2 lines."""
+    if not exams_rows:
+        return ""
+    if now is None:
+        now = datetime.now()
+    lines: list[str] = []
+    for name, status, expected_date in exams_rows[:max_shown]:
+        overdue = False
+        if expected_date:
+            try:
+                dt = datetime.strptime(expected_date, '%d/%m/%Y %H:%M')
+                overdue = dt < now
+            except ValueError:
+                pass
+
+        if overdue:
+            line = f"• {escape_md(name)} — ⚠️ *Atrasado*"
+            line += f"\n  📅 Expected: {escape_md(expected_date)}"
+        else:
+            line = f"• {escape_md(name)} — {escape_md(status)}"
+            if expected_date:
+                line += f"\n  📅 Expected: {escape_md(expected_date)}"
+        lines.append(line)
+    remaining = len(exams_rows) - max_shown
+    if remaining > 0:
+        lines.append(f"_\\.\\.\\.and {escape_md(remaining)} more_")
+    return "\n".join(lines)
 
 
 class LabBot:
@@ -102,21 +145,33 @@ class LabBot:
         """Validate and save credentials."""
         chat_id = update.effective_chat.id
         await update.message.reply_text(
-            "Testing your credentials\\.\\.\\.",
+            "🔍 Logging in and fetching exam details\\.\\.\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         
         crawler = LabCrawler()
         if crawler.login(username, password):
-            if self.db.add_credential(chat_id, username, password):
+            cred_id = self.db.add_credential(chat_id, username, password)
+            if cred_id:
+                exams = crawler.get_exam_details()
+                self.db.save_exams(cred_id, _exams_to_dicts(exams))
+
                 creds = self.db.get_credentials(chat_id)
                 count = len(creds)
-                await update.message.reply_text(
-                    f"✅ Credentials saved\\! You now have {escape_md(count)} credential\\(s\\) being monitored\\.\n"
-                    "I'll check your results every 30 minutes and notify you when they're ready\\.\n\n"
-                    "Use /add again to add more, or /status to see all\\.",
-                    parse_mode=ParseMode.MARKDOWN_V2,
+
+                exam_rows = self.db.get_exams(cred_id)
+                exams_text = _format_exams_md(exam_rows)
+
+                msg = (
+                    f"✅ Credentials saved\\! You now have {escape_md(count)} credential\\(s\\) being monitored\\.\n\n"
                 )
+                if exams_text:
+                    msg += f"*Exams found:*\n{exams_text}\n\n"
+                msg += (
+                    "I'll check your results every 30 minutes and notify you when they're ready\\.\n"
+                    "Use /add again to add more, or /status to see all\\."
+                )
+                await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
             else:
                 await update.message.reply_text(
                     "❌ Failed to save credentials\\. Please try again\\.",
@@ -186,12 +241,16 @@ class LabBot:
         send_message,
         send_document,
         label: str = "",
+        manual: bool = False,
     ):
         """Check results for a single credential. Returns status string."""
         prefix = f"\\[{escape_md(username)}\\] " if label else ""
         try:
             crawler = LabCrawler()
             if crawler.login(username, password):
+                exams = crawler.get_exam_details()
+                self.db.save_exams(cred_id, _exams_to_dicts(exams))
+
                 if crawler.check_results():
                     pdf_url = crawler.get_pdf_link()
                     if pdf_url:
@@ -222,6 +281,27 @@ class LabBot:
                     self.db.update_credential_status(cred_id, "results_ready")
                     return "results_ready"
                 else:
+                    # Check if any exams are overdue
+                    now = datetime.now()
+                    overdue = [e for e in exams if e.expected_date and e.expected_date < now]
+                    prev_status = self.db.get_credential_status(cred_id)
+
+                    if overdue and (manual or prev_status != "results_overdue"):
+                        lines = []
+                        for e in overdue:
+                            date_str = e.expected_date.strftime('%d/%m/%Y %H:%M')
+                            lines.append(f"• {escape_md(e.name)} \\(expected {escape_md(date_str)}\\)")
+                        body = "\n".join(lines)
+                        await send_message(
+                            f"⚠️ {prefix}*Exam\\(s\\) overdue\\!*\n\n"
+                            f"{body}\n\n"
+                            "The expected delivery time has passed\\. "
+                            "Consider contacting the lab for more information\\.",
+                            parse_mode=ParseMode.MARKDOWN_V2,
+                        )
+                        self.db.update_credential_status(cred_id, "results_overdue")
+                        return "results_overdue"
+
                     self.db.update_credential_status(cred_id, "results_pending")
                     return "results_pending"
             else:
@@ -266,6 +346,7 @@ class LabBot:
                     **({"parse_mode": kw["caption_parse_mode"]} if "caption_parse_mode" in kw else {}),
                 ),
                 label=username if multi else "",
+                manual=True,
             )
             if status == "results_pending":
                 pending_count += 1
@@ -302,14 +383,18 @@ class LabBot:
             )
             return
         
-        status_text = "📊 *Monitoring Status*\n\n"
+        now = datetime.now()
         for cred_id, username, last_check, last_status in statuses:
-            status_text += f"*{escape_md(username)}*\n"
-            status_text += f"  Last Check: {escape_md(last_check or 'Never')}\n"
-            status_text += f"  Status: {escape_md(last_status or 'Unknown')}\n\n"
-        status_text += "I check your results every 30 minutes automatically\\."
-        
-        await update.message.reply_text(status_text, parse_mode=ParseMode.MARKDOWN_V2)
+            msg = f"📊 *{escape_md(username)}*\n"
+            msg += f"  Status: {escape_md(last_status or 'Unknown')}\n"
+            if last_check:
+                msg += f"  Last Check: {escape_md(last_check)}\n"
+
+            exam_rows = self.db.get_exams(cred_id)
+            if exam_rows:
+                msg += f"\n{_format_exams_md(exam_rows, now)}\n"
+
+            await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
     
     async def check_all_users(self):
         """Periodic task to check results for all credentials."""
@@ -341,6 +426,8 @@ class LabBot:
                 )
             elif status == "results_pending":
                 logger.info(f"Credential {cred_id} (chat {chat_id}) - results still pending")
+            elif status == "results_overdue":
+                logger.info(f"Credential {cred_id} (chat {chat_id}) - results overdue")
         
         logger.info("Completed periodic check for all credentials")
     

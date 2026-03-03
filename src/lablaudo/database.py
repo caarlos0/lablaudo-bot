@@ -29,6 +29,16 @@ class Database:
                     UNIQUE(chat_id, username)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS exams (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    credential_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    expected_date TEXT,
+                    FOREIGN KEY (credential_id) REFERENCES credentials(id) ON DELETE CASCADE
+                )
+            """)
             # Migrate from old schemas if needed
             try:
                 cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
@@ -61,8 +71,8 @@ class Database:
         finally:
             conn.close()
     
-    def add_credential(self, chat_id: int, username: str, password: str) -> bool:
-        """Add or update a credential for a chat (user or group)."""
+    def add_credential(self, chat_id: int, username: str, password: str) -> Optional[int]:
+        """Add or update a credential for a chat (user or group). Returns credential id or None."""
         try:
             with self.get_connection() as conn:
                 conn.execute("""
@@ -70,9 +80,14 @@ class Database:
                     VALUES (?, ?, ?, 1)
                 """, (chat_id, username, password))
                 conn.commit()
-                return True
+                cursor = conn.execute(
+                    "SELECT id FROM credentials WHERE chat_id = ? AND username = ?",
+                    (chat_id, username),
+                )
+                row = cursor.fetchone()
+                return row[0] if row else None
         except sqlite3.Error:
-            return False
+            return None
     
     def remove_credential(self, chat_id: int, credential_id: int) -> bool:
         """Remove a specific credential by id."""
@@ -149,6 +164,48 @@ class Database:
                 conn.commit()
         except sqlite3.Error:
             pass
+    
+    def get_credential_status(self, credential_id: int) -> Optional[str]:
+        """Get a credential's last status."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT last_status FROM credentials WHERE id = ?",
+                    (credential_id,)
+                )
+                row = cursor.fetchone()
+                return row[0] if row else None
+        except sqlite3.Error:
+            return None
+    
+    def save_exams(self, credential_id: int, exams: list):
+        """Replace stored exams for a credential.
+
+        Each exam should have 'name', 'status', and optionally 'expected_date' (ISO string or None).
+        """
+        try:
+            with self.get_connection() as conn:
+                conn.execute("DELETE FROM exams WHERE credential_id = ?", (credential_id,))
+                for exam in exams:
+                    conn.execute(
+                        "INSERT INTO exams (credential_id, name, status, expected_date) VALUES (?, ?, ?, ?)",
+                        (credential_id, exam["name"], exam["status"], exam.get("expected_date")),
+                    )
+                conn.commit()
+        except sqlite3.Error:
+            pass
+    
+    def get_exams(self, credential_id: int) -> List[Tuple[str, str, Optional[str]]]:
+        """Get stored exams for a credential. Returns list of (name, status, expected_date)."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT name, status, expected_date FROM exams WHERE credential_id = ?",
+                    (credential_id,),
+                )
+                return cursor.fetchall()
+        except sqlite3.Error:
+            return []
     
     def get_credential_statuses(self, chat_id: int) -> List[Tuple[int, str, str, str]]:
         """Get all credential statuses for a chat. Returns (id, username, last_check, last_status)."""
