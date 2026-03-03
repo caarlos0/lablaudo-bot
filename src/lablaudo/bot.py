@@ -286,19 +286,20 @@ class LabBot:
                     overdue = [e for e in exams if e.expected_date and e.expected_date < now]
                     prev_status = self.db.get_credential_status(cred_id)
 
-                    if overdue and (manual or prev_status != "results_overdue"):
-                        lines = []
-                        for e in overdue:
-                            date_str = e.expected_date.strftime('%d/%m/%Y %H:%M')
-                            lines.append(f"• {escape_md(e.name)} \\(previsão: {escape_md(date_str)}\\)")
-                        body = "\n".join(lines)
-                        await send_message(
-                            f"⚠️ {prefix}*Exame\\(s\\) atrasado\\(s\\)\\!*\n\n"
-                            f"{body}\n\n"
-                            "O prazo de entrega previsto já passou\\. "
-                            "Considere entrar em contato com o laboratório\\.",
-                            parse_mode=ParseMode.MARKDOWN_V2,
-                        )
+                    if overdue:
+                        if manual or prev_status != "results_overdue":
+                            lines = []
+                            for e in overdue:
+                                date_str = e.expected_date.strftime('%d/%m/%Y %H:%M')
+                                lines.append(f"• {escape_md(e.name)} \\(previsão: {escape_md(date_str)}\\)")
+                            body = "\n".join(lines)
+                            await send_message(
+                                f"⚠️ {prefix}*Exame\\(s\\) atrasado\\(s\\)\\!*\n\n"
+                                f"{body}\n\n"
+                                "O prazo de entrega previsto já passou\\. "
+                                "Considere entrar em contato com o laboratório\\.",
+                                parse_mode=ParseMode.MARKDOWN_V2,
+                            )
                         self.db.update_credential_status(cred_id, "results_overdue")
                         return "results_overdue"
 
