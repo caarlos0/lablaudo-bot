@@ -69,15 +69,15 @@ def _format_exams_md(exams_rows: list[tuple], now: datetime | None = None, max_s
 
         if overdue:
             line = f"• {escape_md(name)} — ⚠️ *Atrasado*"
-            line += f"\n  📅 Expected: {escape_md(expected_date)}"
+            line += f"\n  📅 Previsão: {escape_md(expected_date)}"
         else:
             line = f"• {escape_md(name)} — {escape_md(status)}"
             if expected_date:
-                line += f"\n  📅 Expected: {escape_md(expected_date)}"
+                line += f"\n  📅 Previsão: {escape_md(expected_date)}"
         lines.append(line)
     remaining = len(exams_rows) - max_shown
     if remaining > 0:
-        lines.append(f"_\\.\\.\\.and {escape_md(remaining)} more_")
+        lines.append(f"_\\.\\.\\.e mais {escape_md(remaining)}_")
     return "\n".join(lines)
 
 
@@ -108,36 +108,36 @@ class LabBot:
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send welcome message."""
         welcome_text = (
-            "🧪 *Lab Results Monitor Bot*\n\n"
-            "I can monitor your lab results at lablaudo\\.com\\.br "
-            "and notify you when they're ready\\!\n\n"
-            "*Commands:*\n"
-            "/add \\- Add lab credentials\n"
-            "/remove \\- Remove credentials by username\n"
-            "/check \\- Check results now\n"
-            "/status \\- Show current status\n"
-            "/help \\- Show this help message\n\n"
-            "Use /add to get started\\! You can add multiple "
-            "credentials to monitor several results at once\\."
+            "🧪 *Monitor de Resultados de Laboratório*\n\n"
+            "Eu monitoro seus resultados no lablaudo\\.com\\.br "
+            "e aviso quando estiverem prontos\\!\n\n"
+            "*Comandos:*\n"
+            "/add \\- Adicionar credenciais\n"
+            "/remove \\- Remover credenciais por usuário\n"
+            "/check \\- Verificar resultados agora\n"
+            "/status \\- Ver status atual\n"
+            "/help \\- Mostrar esta mensagem\n\n"
+            "Use /add para começar\\! Você pode adicionar múltiplas "
+            "credenciais para monitorar vários resultados\\."
         )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN_V2)
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send help message."""
         help_text = (
-            "*Available Commands:*\n\n"
-            "/add \\- Add lab portal credentials \\(can add multiple\\)\n"
-            "/remove \\- Remove credentials by username\n"
-            "/check \\- Check all your results immediately\n"
-            "/status \\- Show your monitoring status\n"
-            "/help \\- Show this help message\n\n"
-            "*How it works:*\n"
-            "1\\. Use /add to store your lab portal credentials\n"
-            "2\\. You can add multiple credentials for different results\n"
-            "3\\. I'll check all your results every 30 minutes\n"
-            "4\\. You'll get notified when results are ready \\(green status\\)\n"
-            "5\\. Each credential is removed automatically after its PDF is delivered\n\n"
-            "_Privacy: Your credentials are stored securely and only used to check your results\\._"
+            "*Comandos disponíveis:*\n\n"
+            "/add \\- Adicionar credenciais do portal \\(aceita múltiplas\\)\n"
+            "/remove \\- Remover credenciais por usuário\n"
+            "/check \\- Verificar todos os resultados agora\n"
+            "/status \\- Ver status do monitoramento\n"
+            "/help \\- Mostrar esta mensagem\n\n"
+            "*Como funciona:*\n"
+            "1\\. Use /add para salvar suas credenciais do portal\n"
+            "2\\. Você pode adicionar múltiplas credenciais\n"
+            "3\\. Eu verifico seus resultados a cada 30 minutos\n"
+            "4\\. Você será notificado quando os resultados estiverem prontos\n"
+            "5\\. Cada credencial é removida automaticamente após o envio do PDF\n\n"
+            "_Privacidade: suas credenciais são armazenadas de forma segura e usadas apenas para verificar seus resultados\\._"
         )
         await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN_V2)
     
@@ -145,7 +145,7 @@ class LabBot:
         """Validate and save credentials."""
         chat_id = update.effective_chat.id
         await update.message.reply_text(
-            "🔍 Logging in and fetching exam details\\.\\.\\.",
+            "🔍 Entrando e buscando detalhes dos exames\\.\\.\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
         
@@ -163,23 +163,23 @@ class LabBot:
                 exams_text = _format_exams_md(exam_rows)
 
                 msg = (
-                    f"✅ Credentials saved\\! You now have {escape_md(count)} credential\\(s\\) being monitored\\.\n\n"
+                    f"✅ Credenciais salvas\\! Você tem {escape_md(count)} credencial\\(is\\) sendo monitorada\\(s\\)\\.\n\n"
                 )
                 if exams_text:
-                    msg += f"*Exams found:*\n{exams_text}\n\n"
+                    msg += f"*Exames encontrados:*\n{exams_text}\n\n"
                 msg += (
-                    "I'll check your results every 30 minutes and notify you when they're ready\\.\n"
-                    "Use /add again to add more, or /status to see all\\."
+                    "Vou verificar seus resultados a cada 30 minutos e avisar quando estiverem prontos\\.\n"
+                    "Use /add novamente para adicionar mais, ou /status para ver todos\\."
                 )
                 await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
             else:
                 await update.message.reply_text(
-                    "❌ Failed to save credentials\\. Please try again\\.",
+                    "❌ Falha ao salvar credenciais\\. Tente novamente\\.",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
         else:
             await update.message.reply_text(
-                "❌ Login failed\\. Please check your credentials and try again\\.",
+                "❌ Login falhou\\. Verifique suas credenciais e tente novamente\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
     
@@ -190,15 +190,15 @@ class LabBot:
             return
         
         await update.message.reply_text(
-            "Usage: `/add username password`\n\n"
-            "Example: `/add 12345678 ABC123DEF`",
+            "Uso: `/add usuario senha`\n\n"
+            "Exemplo: `/add 12345678 ABC123DEF`",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages."""
         await update.message.reply_text(
-            "Use /help to see available commands\\.",
+            "Use /help para ver os comandos disponíveis\\.",
             parse_mode=ParseMode.MARKDOWN_V2,
         )
     
@@ -210,11 +210,11 @@ class LabBot:
             creds = self.db.get_credentials(chat_id)
             if not creds:
                 await update.message.reply_text(
-                    "❌ No credentials found to remove\\.",
+                    "❌ Nenhuma credencial encontrada para remover\\.",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
                 return
-            msg = "Usage: `/remove username`\n\nYour credentials:\n"
+            msg = "Uso: `/remove usuario`\n\nSuas credenciais:\n"
             for _, username, _ in creds:
                 msg += f"  `{escape_md(username)}`\n"
             await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
@@ -223,12 +223,12 @@ class LabBot:
         username = context.args[0]
         if self.db.remove_credential_by_username(chat_id, username):
             await update.message.reply_text(
-                f"✅ Credentials for {escape_md(username)} removed\\.",
+                f"✅ Credenciais de {escape_md(username)} removidas\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         else:
             await update.message.reply_text(
-                "❌ Credential not found\\.",
+                "❌ Credencial não encontrada\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
     
@@ -260,7 +260,7 @@ class LabBot:
                             await send_document(
                                 document=pdf_content,
                                 filename=filename,
-                                caption=f"🎉 {prefix}*Lab Results Ready\\!*\n\nYour lab results are attached\\.",
+                                caption=f"🎉 {prefix}*Resultados Prontos\\!*\n\nSeus resultados estão anexados\\.",
                                 caption_parse_mode=ParseMode.MARKDOWN_V2,
                             )
                             self.db.remove_credential(chat_id, cred_id)
@@ -268,14 +268,14 @@ class LabBot:
                             return "results_delivered"
                         else:
                             await send_message(
-                                f"🎉 {prefix}*Lab Results Ready\\!*\n\n"
-                                "Results available on the portal, but I couldn't download the PDF\\.",
+                                f"🎉 {prefix}*Resultados Prontos\\!*\n\n"
+                                "Resultados disponíveis no portal, mas não consegui baixar o PDF\\.",
                                 parse_mode=ParseMode.MARKDOWN_V2,
                             )
                     else:
                         await send_message(
-                            f"🎉 {prefix}*Lab Results Ready\\!*\n\n"
-                            "Your results are available on the portal\\.",
+                            f"🎉 {prefix}*Resultados Prontos\\!*\n\n"
+                            "Seus resultados estão disponíveis no portal\\.",
                             parse_mode=ParseMode.MARKDOWN_V2,
                         )
                     self.db.update_credential_status(cred_id, "results_ready")
@@ -290,13 +290,13 @@ class LabBot:
                         lines = []
                         for e in overdue:
                             date_str = e.expected_date.strftime('%d/%m/%Y %H:%M')
-                            lines.append(f"• {escape_md(e.name)} \\(expected {escape_md(date_str)}\\)")
+                            lines.append(f"• {escape_md(e.name)} \\(previsão: {escape_md(date_str)}\\)")
                         body = "\n".join(lines)
                         await send_message(
-                            f"⚠️ {prefix}*Exam\\(s\\) overdue\\!*\n\n"
+                            f"⚠️ {prefix}*Exame\\(s\\) atrasado\\(s\\)\\!*\n\n"
                             f"{body}\n\n"
-                            "The expected delivery time has passed\\. "
-                            "Consider contacting the lab for more information\\.",
+                            "O prazo de entrega previsto já passou\\. "
+                            "Considere entrar em contato com o laboratório\\.",
                             parse_mode=ParseMode.MARKDOWN_V2,
                         )
                         self.db.update_credential_status(cred_id, "results_overdue")
@@ -318,7 +318,7 @@ class LabBot:
         
         if not creds:
             await update.message.reply_text(
-                "❌ No credentials found\\. Use /add to add your credentials first\\.",
+                "❌ Nenhuma credencial encontrada\\. Use /add para adicionar suas credenciais\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
             return
@@ -326,12 +326,12 @@ class LabBot:
         multi = len(creds) > 1
         if multi:
             await update.message.reply_text(
-                f"🔍 Checking {escape_md(len(creds))} set\\(s\\) of results\\.\\.\\.",
+                f"🔍 Verificando {escape_md(len(creds))} conjunto\\(s\\) de resultados\\.\\.\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         else:
             await update.message.reply_text(
-                "🔍 Checking your results\\.\\.\\.",
+                "🔍 Verificando seus resultados\\.\\.\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         
@@ -354,20 +354,20 @@ class LabBot:
                 error_count += 1
                 prefix = f"\\[{escape_md(username)}\\] " if multi else ""
                 await update.message.reply_text(
-                    f"❌ {prefix}Login failed\\. Check credentials with /add",
+                    f"❌ {prefix}Falha no login\\. Verifique as credenciais com /add",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
             elif status == "error":
                 error_count += 1
                 prefix = f"\\[{escape_md(username)}\\] " if multi else ""
                 await update.message.reply_text(
-                    f"❌ {prefix}Error checking results\\.",
+                    f"❌ {prefix}Erro ao verificar resultados\\.",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
         
         if pending_count > 0:
             await update.message.reply_text(
-                f"⏳ {escape_md(pending_count)} result\\(s\\) still pending\\. I'll keep monitoring\\.",
+                f"⏳ {escape_md(pending_count)} resultado\\(s\\) ainda pendente\\(s\\)\\. Continuarei monitorando\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
     
@@ -378,17 +378,26 @@ class LabBot:
         
         if not statuses:
             await update.message.reply_text(
-                "❌ No credentials found\\. Use /add to add your credentials first\\.",
+                "❌ Nenhuma credencial encontrada\\. Use /add para adicionar suas credenciais\\.",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
             return
         
+        _STATUS_PT = {
+            "results_pending": "Pendente",
+            "results_ready": "Pronto",
+            "results_delivered": "Entregue",
+            "results_overdue": "Atrasado",
+            "login_failed": "Falha no login",
+        }
+
         now = datetime.now()
         for cred_id, username, last_check, last_status in statuses:
+            status_label = _STATUS_PT.get(last_status, last_status or "Desconhecido")
             msg = f"📊 *{escape_md(username)}*\n"
-            msg += f"  Status: {escape_md(last_status or 'Unknown')}\n"
+            msg += f"  Status: {escape_md(status_label)}\n"
             if last_check:
-                msg += f"  Last Check: {escape_md(last_check)}\n"
+                msg += f"  Última verificação: {escape_md(last_check)}\n"
 
             exam_rows = self.db.get_exams(cred_id)
             if exam_rows:
@@ -420,8 +429,8 @@ class LabBot:
             if status == "login_failed":
                 await self.application.bot.send_message(
                     chat_id=chat_id,
-                    text=f"❌ \\[{escape_md(username)}\\] *Login Failed*\n\n"
-                         "I couldn't log into this account\\. Check credentials with /add",
+                    text=f"❌ \\[{escape_md(username)}\\] *Falha no Login*\n\n"
+                         "Não consegui entrar nesta conta\\. Verifique as credenciais com /add",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
             elif status == "results_pending":
