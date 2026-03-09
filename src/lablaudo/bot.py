@@ -51,33 +51,79 @@ def _exams_to_dicts(exams: list[ExamDetail]) -> list[dict]:
     ]
 
 
+_READY_KEYWORDS = {"disponível", "disponivel", "pronto", "liberado", "concluído", "concluido"}
+
+
+def _is_exam_ready(status: str) -> bool:
+    """Check if an exam status indicates it's ready."""
+    return status.strip().lower() in _READY_KEYWORDS
+
+
 def _format_exams_md(exams_rows: list[tuple], now: datetime | None = None, max_shown: int = 3) -> str:
-    """Format exam rows (name, status, expected_date) as MarkdownV2 lines."""
+    """Format exam rows (name, status, expected_date) as MarkdownV2 summary."""
     if not exams_rows:
         return ""
     if now is None:
         now = datetime.now()
-    lines: list[str] = []
-    for name, status, expected_date in exams_rows[:max_shown]:
-        overdue = False
-        if expected_date:
-            try:
-                dt = datetime.strptime(expected_date, '%d/%m/%Y %H:%M')
-                overdue = dt < now
-            except ValueError:
-                pass
 
-        if overdue:
-            line = f"• {escape_md(name)} — ⚠️ *Atrasado*"
-            line += f"\n  📅 Previsão: {escape_md(expected_date)}"
+    ready: list[tuple] = []
+    pending: list[tuple] = []
+    overdue: list[tuple] = []
+
+    for row in exams_rows:
+        name, status, expected_date = row
+        if _is_exam_ready(status):
+            ready.append(row)
         else:
-            line = f"• {escape_md(name)} — {escape_md(status)}"
+            is_overdue = False
             if expected_date:
-                line += f"\n  📅 Previsão: {escape_md(expected_date)}"
+                try:
+                    dt = datetime.strptime(expected_date, '%d/%m/%Y %H:%M')
+                    is_overdue = dt < now
+                except ValueError:
+                    pass
+            if is_overdue:
+                overdue.append(row)
+            else:
+                pending.append(row)
+
+    lines: list[str] = []
+
+    if ready:
+        lines.append(f"✅ {escape_md(len(ready))} item\\(ns\\) pronto\\(s\\)")
+
+    if pending:
+        dates: list[datetime] = []
+        for _, _, ed in pending:
+            if ed:
+                try:
+                    dates.append(datetime.strptime(ed, '%d/%m/%Y %H:%M'))
+                except ValueError:
+                    pass
+        line = f"⏳ {escape_md(len(pending))} item\\(ns\\) pendente\\(s\\)"
+        if dates:
+            min_d = min(dates).strftime('%d/%m/%Y')
+            max_d = max(dates).strftime('%d/%m/%Y')
+            if min_d == max_d:
+                line += f", previsão: {escape_md(min_d)}"
+            else:
+                line += f", previsão entre {escape_md(min_d)} e {escape_md(max_d)}"
         lines.append(line)
-    remaining = len(exams_rows) - max_shown
-    if remaining > 0:
-        lines.append(f"_\\.\\.\\.e mais {escape_md(remaining)}_")
+
+    if overdue:
+        dates_o: list[datetime] = []
+        for _, _, ed in overdue:
+            if ed:
+                try:
+                    dates_o.append(datetime.strptime(ed, '%d/%m/%Y %H:%M'))
+                except ValueError:
+                    pass
+        line = f"⚠️ {escape_md(len(overdue))} item\\(ns\\) atrasado\\(s\\)"
+        if dates_o:
+            max_d = max(dates_o).strftime('%d/%m/%Y')
+            line += f" \\(previsão era {escape_md(max_d)}\\)"
+        lines.append(line)
+
     return "\n".join(lines)
 
 
@@ -281,25 +327,17 @@ class LabBot:
                     self.db.update_credential_status(cred_id, "results_ready")
                     return "results_ready"
                 else:
-                    # Check if any exams are overdue
                     now = datetime.now()
                     overdue = [e for e in exams if e.expected_date and e.expected_date < now]
                     prev_status = self.db.get_credential_status(cred_id)
+                    exam_rows = self.db.get_exams(cred_id)
+                    summary = _format_exams_md(exam_rows, now)
 
                     if overdue:
                         if manual or prev_status != "results_overdue":
-                            lines = []
-                            for e in overdue:
-                                date_str = e.expected_date.strftime('%d/%m/%Y %H:%M')
-                                lines.append(f"• {escape_md(e.name)} \\(previsão: {escape_md(date_str)}\\)")
-                            body = "\n".join(lines)
-                            await send_message(
-                                f"⚠️ {prefix}*Exame\\(s\\) atrasado\\(s\\)\\!*\n\n"
-                                f"{body}\n\n"
-                                "O prazo de entrega previsto já passou\\. "
-                                "Considere entrar em contato com o laboratório\\.",
-                                parse_mode=ParseMode.MARKDOWN_V2,
-                            )
+                            msg = f"📋 {prefix}*Status dos exames:*\n\n{summary}\n\n"
+                            msg += "Considere entrar em contato com o laboratório\\."
+                            await send_message(msg, parse_mode=ParseMode.MARKDOWN_V2)
                         self.db.update_credential_status(cred_id, "results_overdue")
                         return "results_overdue"
 
@@ -336,7 +374,7 @@ class LabBot:
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         
-        pending_count = 0
+        pending_creds: list[tuple[int, str]] = []
         error_count = 0
         for cred_id, username, password in creds:
             status = await self._check_single_credential(
@@ -350,7 +388,7 @@ class LabBot:
                 manual=True,
             )
             if status == "results_pending":
-                pending_count += 1
+                pending_creds.append((cred_id, username))
             elif status == "login_failed":
                 error_count += 1
                 prefix = f"\\[{escape_md(username)}\\] " if multi else ""
@@ -366,11 +404,14 @@ class LabBot:
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
         
-        if pending_count > 0:
-            await update.message.reply_text(
-                f"⏳ {escape_md(pending_count)} resultado\\(s\\) ainda pendente\\(s\\)\\. Continuarei monitorando\\.",
-                parse_mode=ParseMode.MARKDOWN_V2,
-            )
+        now = datetime.now()
+        for cred_id, username in pending_creds:
+            prefix = f"\\[{escape_md(username)}\\] " if multi else ""
+            exam_rows = self.db.get_exams(cred_id)
+            summary = _format_exams_md(exam_rows, now)
+            msg = f"📋 {prefix}*Status dos exames:*\n\n{summary}" if summary else f"⏳ {prefix}Resultados pendentes\\."
+            msg += "\n\nContinuarei monitorando\\."
+            await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
     
     async def status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show monitoring status for this chat."""
