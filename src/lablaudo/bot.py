@@ -345,13 +345,14 @@ class LabBot:
                                     filename=filename,
                                     caption=(
                                         f"📋 {prefix}*Relatório parcial*\n\n"
-                                        f"{summary}"
+                                        f"{summary}\n\n"
+                                        "Continuarei monitorando\\."
                                     ),
                                     caption_parse_mode=ParseMode.MARKDOWN_V2,
                                 )
                                 new_status = "results_overdue" if overdue else "results_pending"
                                 self.db.update_credential_status(cred_id, new_status)
-                                return new_status
+                                return "partial_delivered"
 
                     if overdue:
                         if manual or prev_status != "results_overdue":
