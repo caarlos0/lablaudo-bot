@@ -490,12 +490,7 @@ class LabBot:
                 label=username,
             )
             if status == "login_failed":
-                await self.application.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"❌ \\[{escape_md(username)}\\] *Falha no Login*\n\n"
-                         "Não consegui entrar nesta conta\\. Verifique as credenciais com /add",
-                    parse_mode=ParseMode.MARKDOWN_V2,
-                )
+                logger.warning(f"Credential {cred_id} (chat {chat_id}) - login failed, will retry next cycle")
             elif status == "results_pending":
                 logger.info(f"Credential {cred_id} (chat {chat_id}) - results still pending")
             elif status == "results_overdue":
