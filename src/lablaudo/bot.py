@@ -8,7 +8,7 @@ import signal
 import logging
 from datetime import datetime
 
-from telegram import Update
+from telegram import BotCommand, Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -518,6 +518,14 @@ class LabBot:
         logger.info("Starting Lab Results Monitor Bot")
         
         await self.application.initialize()
+        await self.application.bot.set_my_commands([
+            BotCommand("start", "Iniciar o bot"),
+            BotCommand("add", "Adicionar credenciais"),
+            BotCommand("remove", "Remover credenciais"),
+            BotCommand("check", "Verificar resultados agora"),
+            BotCommand("status", "Ver status atual"),
+            BotCommand("help", "Mostrar ajuda"),
+        ])
         await self.application.start()
         await self.application.updater.start_polling()
         
