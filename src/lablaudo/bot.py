@@ -329,9 +329,29 @@ class LabBot:
                 else:
                     now = datetime.now()
                     overdue = [e for e in exams if e.expected_date and e.expected_date < now]
+                    ready_exams = [e for e in exams if _is_exam_ready(e.status)]
                     prev_status = self.db.get_credential_status(cred_id)
                     exam_rows = self.db.get_exams(cred_id)
                     summary = _format_exams_md(exam_rows, now)
+
+                    if manual and ready_exams:
+                        pdf_url = crawler.get_pdf_link()
+                        if pdf_url:
+                            pdf_data = crawler.download_pdf(pdf_url)
+                            if pdf_data:
+                                pdf_content, filename = pdf_data
+                                await send_document(
+                                    document=pdf_content,
+                                    filename=filename,
+                                    caption=(
+                                        f"📋 {prefix}*Relatório parcial*\n\n"
+                                        f"{summary}"
+                                    ),
+                                    caption_parse_mode=ParseMode.MARKDOWN_V2,
+                                )
+                                new_status = "results_overdue" if overdue else "results_pending"
+                                self.db.update_credential_status(cred_id, new_status)
+                                return new_status
 
                     if overdue:
                         if manual or prev_status != "results_overdue":
