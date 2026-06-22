@@ -71,6 +71,28 @@ class LabCrawler:
             f"O portal retornou um erro inesperado (HTTP {status}). "
             "Tente novamente mais tarde."
         )
+
+    def _request(self, fn, username: str, action: str, **kwargs):
+        """Perform an HTTP request, setting last_error on network failure.
+
+        Returns the Response, or None if the request timed out or failed to
+        connect.
+        """
+        try:
+            return fn(timeout=30, **kwargs)
+        except requests.Timeout:
+            self.last_error = (
+                "O portal demorou demais para responder. Tente novamente mais tarde."
+            )
+            logger.warning("Login failed for %s: timeout %s", username, action)
+            return None
+        except requests.RequestException as exc:
+            self.last_error = (
+                "Não consegui conectar ao portal. Verifique sua conexão e "
+                "tente novamente."
+            )
+            logger.warning("Login failed for %s: error %s: %s", username, action, exc)
+            return None
     
     def _is_row_green(self, row) -> bool:
         """Check if a single row indicates results are ready (green)."""
@@ -125,22 +147,10 @@ class LabCrawler:
         logger.info("Attempting login for %s", username)
 
         # Fetch the login page.
-        try:
-            response = self.session.get(self.login_url, timeout=30)
-        except requests.Timeout:
-            self.last_error = (
-                "O portal demorou demais para responder. Tente novamente mais tarde."
-            )
-            logger.warning("Login failed for %s: timeout fetching login page", username)
-            return False
-        except requests.RequestException as exc:
-            self.last_error = (
-                "Não consegui conectar ao portal. Verifique sua conexão e "
-                "tente novamente."
-            )
-            logger.warning(
-                "Login failed for %s: error fetching login page: %s", username, exc
-            )
+        response = self._request(
+            self.session.get, username, "fetching login page", url=self.login_url
+        )
+        if response is None:
             return False
 
         logger.debug(
@@ -221,27 +231,15 @@ class LabCrawler:
             sorted(login_data.keys()),
         )
 
-        try:
-            login_response = self.session.post(
-                action_url,
-                data=login_data,
-                allow_redirects=True,
-                timeout=30,
-            )
-        except requests.Timeout:
-            self.last_error = (
-                "O portal demorou demais para responder. Tente novamente mais tarde."
-            )
-            logger.warning("Login failed for %s: timeout submitting login", username)
-            return False
-        except requests.RequestException as exc:
-            self.last_error = (
-                "Não consegui conectar ao portal. Verifique sua conexão e "
-                "tente novamente."
-            )
-            logger.warning(
-                "Login failed for %s: error submitting login: %s", username, exc
-            )
+        login_response = self._request(
+            self.session.post,
+            username,
+            "submitting login",
+            url=action_url,
+            data=login_data,
+            allow_redirects=True,
+        )
+        if login_response is None:
             return False
 
         if login_response.status_code != 200:
