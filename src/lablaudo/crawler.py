@@ -3,7 +3,7 @@
 
 import logging
 import re
-import requests
+from curl_cffi import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Optional, Tuple
@@ -11,14 +11,6 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
-
-# Browser-like User-Agent so Cloudflare doesn't serve a bot-challenge page
-# (the default python-requests UA gets blocked from datacenter IPs).
-_USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/126.0.0.0 Safari/537.36"
-)
 
 
 @dataclass
@@ -38,15 +30,10 @@ class LabCrawler:
     """Crawler for lab results portal."""
     
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": _USER_AGENT,
-            "Accept": (
-                "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                "image/avif,image/webp,*/*;q=0.8"
-            ),
-            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-        })
+        # impersonate a real Chrome browser (TLS/JA3 fingerprint + headers) so
+        # Cloudflare doesn't 403 us as a bot.
+        self.session = requests.Session(impersonate="chrome")
+        self.session.headers["Accept-Language"] = "pt-BR,pt;q=0.9,en;q=0.8"
         self.base_url = "https://lablaudo.com.br"
         self.login_url = f"{self.base_url}/acesso_paciente"
         self.results_url = None
@@ -80,13 +67,13 @@ class LabCrawler:
         """
         try:
             return fn(timeout=30, **kwargs)
-        except requests.Timeout:
+        except requests.exceptions.Timeout:
             self.last_error = (
                 "O portal demorou demais para responder. Tente novamente mais tarde."
             )
             logger.warning("Login failed for %s: timeout %s", username, action)
             return None
-        except requests.RequestException as exc:
+        except requests.exceptions.RequestException as exc:
             self.last_error = (
                 "Não consegui conectar ao portal. Verifique sua conexão e "
                 "tente novamente."
@@ -331,7 +318,7 @@ class LabCrawler:
             
             return all_green
             
-        except requests.RequestException:
+        except requests.exceptions.RequestException:
             return False
     
     def get_exam_details(self) -> List[ExamDetail]:
@@ -379,7 +366,7 @@ class LabCrawler:
                 exams.append(ExamDetail(name=name, status=status, expected_date=expected_date))
 
             return exams
-        except requests.RequestException:
+        except requests.exceptions.RequestException:
             return []
     
     def get_pdf_link(self) -> Optional[str]:
@@ -429,7 +416,7 @@ class LabCrawler:
             
             return None
             
-        except requests.RequestException:
+        except requests.exceptions.RequestException:
             return None
     
     def download_pdf(self, pdf_url: str) -> Optional[Tuple[bytes, str]]:
@@ -538,5 +525,5 @@ class LabCrawler:
             
             return response.content, filename
             
-        except requests.RequestException:
+        except requests.exceptions.RequestException:
             return None

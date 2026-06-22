@@ -35,6 +35,7 @@
 - **Startup check**: Runs full check for all users immediately when bot starts
 - **Periodic monitoring**: Continues checking every 30 minutes
 - **Error handling**: Comprehensive fallback notifications
+- **Browser impersonation**: Uses `curl_cffi` with `impersonate="chrome"` (real Chrome TLS/JA3 fingerprint + headers) so Cloudflare doesn't 403 the crawler as a bot
 
 ## Docker
 
