@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
 """Lab results crawler for patient portal."""
 
+import logging
 import re
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Optional, Tuple
 from dataclasses import dataclass
+from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
+
+# Browser-like User-Agent so Cloudflare doesn't serve a bot-challenge page
+# (the default python-requests UA gets blocked from datacenter IPs).
+_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/126.0.0.0 Safari/537.36"
+)
 
 
 @dataclass
@@ -27,9 +39,38 @@ class LabCrawler:
     
     def __init__(self):
         self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": _USER_AGENT,
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                "image/avif,image/webp,*/*;q=0.8"
+            ),
+            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        })
         self.base_url = "https://lablaudo.com.br"
         self.login_url = f"{self.base_url}/acesso_paciente"
         self.results_url = None
+        self.last_error: Optional[str] = None
+
+    @staticmethod
+    def _http_error_message(status: int) -> str:
+        """Return a user-friendly Portuguese message for an HTTP error status."""
+        if status in (401, 403):
+            return (
+                "O portal recusou o acesso (possível bloqueio ou proteção "
+                "anti-bot). Tente novamente mais tarde."
+            )
+        if status == 429:
+            return "Muitas tentativas. Aguarde alguns minutos e tente novamente."
+        if 500 <= status < 600:
+            return (
+                f"O portal está com problemas no momento (HTTP {status}). "
+                "Tente novamente mais tarde."
+            )
+        return (
+            f"O portal retornou um erro inesperado (HTTP {status}). "
+            "Tente novamente mais tarde."
+        )
     
     def _is_row_green(self, row) -> bool:
         """Check if a single row indicates results are ready (green)."""
@@ -75,79 +116,169 @@ class LabCrawler:
         )
     
     def login(self, username: str, password: str) -> bool:
-        """Login to the patient portal."""
+        """Login to the patient portal.
+
+        On failure, returns False and sets ``self.last_error`` to a
+        user-friendly Portuguese message explaining what went wrong.
+        """
+        self.last_error = None
+        logger.info("Attempting login for %s", username)
+
+        # Fetch the login page.
         try:
-            # Get login page to extract any CSRF tokens or form data
-            response = self.session.get(self.login_url)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            form = soup.find('form')
-            
-            if not form:
-                return False
-            
-            # Prepare login data - try common field names
-            login_data = {
-                'username': username,
-                'password': password,
-                'identificacao': username,  # Portuguese field name
-                'senha': password,          # Portuguese field name
-            }
-            
-            # Extract any hidden form fields
-            for hidden_input in form.find_all('input', type='hidden'):
-                name = hidden_input.get('name')
-                value = hidden_input.get('value', '')
-                if name:
-                    login_data[name] = value
-            
-            # Check actual form field names
-            for input_field in form.find_all('input'):
-                field_name = input_field.get('name', '')
-                field_type = input_field.get('type', '')
-                if field_type in ['text', 'email', 'number'] and not login_data.get(field_name):
-                    login_data[field_name] = username
-                elif field_type == 'password' and not login_data.get(field_name):
-                    login_data[field_name] = password
-            
-            # Submit login form
-            action_url = form.get('action', self.login_url)
-            if action_url.startswith('/'):
-                action_url = self.base_url + action_url
-            elif not action_url.startswith('http'):
-                action_url = self.login_url
-            
+            response = self.session.get(self.login_url, timeout=30)
+        except requests.Timeout:
+            self.last_error = (
+                "O portal demorou demais para responder. Tente novamente mais tarde."
+            )
+            logger.warning("Login failed for %s: timeout fetching login page", username)
+            return False
+        except requests.RequestException as exc:
+            self.last_error = (
+                "Não consegui conectar ao portal. Verifique sua conexão e "
+                "tente novamente."
+            )
+            logger.warning(
+                "Login failed for %s: error fetching login page: %s", username, exc
+            )
+            return False
+
+        logger.debug(
+            "Login page for %s: status=%s server=%s cf-ray=%s",
+            username,
+            response.status_code,
+            response.headers.get("server"),
+            response.headers.get("cf-ray"),
+        )
+
+        if response.status_code != 200:
+            self.last_error = self._http_error_message(response.status_code)
+            logger.warning(
+                "Login failed for %s: login page returned HTTP %s "
+                "(server=%s, cf-ray=%s)",
+                username,
+                response.status_code,
+                response.headers.get("server"),
+                response.headers.get("cf-ray"),
+            )
+            return False
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        form = soup.find('form')
+
+        if not form:
+            self.last_error = (
+                "O portal está bloqueando o acesso automatizado no momento "
+                "(proteção anti-bot). Tente novamente mais tarde."
+            )
+            logger.warning(
+                "Login failed for %s: no <form> on login page "
+                "(status=%s, server=%s, cf-ray=%s) - likely a Cloudflare "
+                "bot-challenge page served to this IP/User-Agent",
+                username,
+                response.status_code,
+                response.headers.get("server"),
+                response.headers.get("cf-ray"),
+            )
+            return False
+
+        # Prepare login data - try common field names
+        login_data = {
+            'username': username,
+            'password': password,
+            'identificacao': username,  # Portuguese field name
+            'senha': password,          # Portuguese field name
+        }
+
+        # Extract any hidden form fields
+        for hidden_input in form.find_all('input', type='hidden'):
+            name = hidden_input.get('name')
+            value = hidden_input.get('value', '')
+            if name:
+                login_data[name] = value
+
+        # Check actual form field names
+        for input_field in form.find_all('input'):
+            field_name = input_field.get('name', '')
+            field_type = input_field.get('type', '')
+            if field_type in ['text', 'email', 'number'] and not login_data.get(field_name):
+                login_data[field_name] = username
+            elif field_type == 'password' and not login_data.get(field_name):
+                login_data[field_name] = password
+
+        # Submit login form
+        action_url = form.get('action', self.login_url)
+        if action_url.startswith('/'):
+            action_url = self.base_url + action_url
+        elif not action_url.startswith('http'):
+            action_url = self.login_url
+
+        # Log field names only (never values) to avoid leaking the password.
+        logger.debug(
+            "Submitting login for %s to %s with fields %s",
+            username,
+            action_url,
+            sorted(login_data.keys()),
+        )
+
+        try:
             login_response = self.session.post(
                 action_url,
                 data=login_data,
-                allow_redirects=True
+                allow_redirects=True,
+                timeout=30,
             )
-            login_response.raise_for_status()
-            
-            # Check if login was successful
-            page_text = login_response.text.lower()
-            
-            # Look for success indicators
-            success_indicators = [
-                'logout', 'sair', 'resultados', 'results', 'bem-vindo', 'welcome',
-                'dashboard', 'painel', 'exames', 'laudos'
-            ]
-            
-            has_success_indicator = any(indicator in page_text for indicator in success_indicators)
-            
-            # Also check if we're no longer on login page
-            not_on_login = 'entrar' not in page_text or 'login' not in page_text
-            
-            if has_success_indicator or not_on_login:
-                # Store the current URL for results checking
-                self.results_url = login_response.url
-                return True
-            else:
-                return False
-                
-        except requests.RequestException:
+        except requests.Timeout:
+            self.last_error = (
+                "O portal demorou demais para responder. Tente novamente mais tarde."
+            )
+            logger.warning("Login failed for %s: timeout submitting login", username)
             return False
+        except requests.RequestException as exc:
+            self.last_error = (
+                "Não consegui conectar ao portal. Verifique sua conexão e "
+                "tente novamente."
+            )
+            logger.warning(
+                "Login failed for %s: error submitting login: %s", username, exc
+            )
+            return False
+
+        if login_response.status_code != 200:
+            self.last_error = self._http_error_message(login_response.status_code)
+            logger.warning(
+                "Login failed for %s: login submit returned HTTP %s (url=%s)",
+                username,
+                login_response.status_code,
+                login_response.url,
+            )
+            return False
+
+        # Check if login was successful. A valid login redirects away from the
+        # login page (e.g. to /laudos/<id>); rejected credentials keep us on the
+        # /acesso_paciente login page, so the final URL is the reliable signal.
+        final_path = urlparse(login_response.url).path.rstrip('/')
+        login_path = urlparse(self.login_url).path.rstrip('/')
+        still_on_login = final_path == login_path or final_path.startswith(login_path + '/')
+
+        if not still_on_login:
+            # Store the current URL for results checking
+            self.results_url = login_response.url
+            logger.info("Login succeeded for %s (url=%s)", username, login_response.url)
+            return True
+
+        self.last_error = (
+            "Não foi possível entrar. Verifique se o usuário e a senha estão "
+            "corretos."
+        )
+        logger.warning(
+            "Login failed for %s: still on login page after submit "
+            "(status=%s, url=%s) - credentials likely incorrect",
+            username,
+            login_response.status_code,
+            login_response.url,
+        )
+        return False
     
     def check_results(self) -> bool:
         """Check if all results have green background (ready)."""

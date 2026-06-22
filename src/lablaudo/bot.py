@@ -224,8 +224,9 @@ class LabBot:
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
         else:
+            reason = crawler.last_error or "Verifique suas credenciais e tente novamente."
             await update.message.reply_text(
-                "❌ Login falhou\\. Verifique suas credenciais e tente novamente\\.",
+                f"❌ {escape_md(reason)}",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
     
@@ -366,6 +367,12 @@ class LabBot:
                     return "results_pending"
             else:
                 self.db.update_credential_status(cred_id, "login_failed")
+                if manual:
+                    reason = crawler.last_error or "Verifique as credenciais com /add"
+                    await send_message(
+                        f"❌ {prefix}{escape_md(reason)}",
+                        parse_mode=ParseMode.MARKDOWN_V2,
+                    )
                 return "login_failed"
         except Exception as e:
             logger.error(f"Error checking credential {cred_id} for chat {chat_id}: {e}")
@@ -412,11 +419,6 @@ class LabBot:
                 pending_creds.append((cred_id, username))
             elif status == "login_failed":
                 error_count += 1
-                prefix = f"\\[{escape_md(username)}\\] " if multi else ""
-                await update.message.reply_text(
-                    f"❌ {prefix}Falha no login\\. Verifique as credenciais com /add",
-                    parse_mode=ParseMode.MARKDOWN_V2,
-                )
             elif status == "error":
                 error_count += 1
                 prefix = f"\\[{escape_md(username)}\\] " if multi else ""
