@@ -10,7 +10,7 @@ A Telegram bot that monitors lab results at https://lablaudo.com.br/acesso_pacie
 
 - Interactive Telegram bot interface
 - Secure credential storage in SQLite database
-- Automatic monitoring every 30 minutes
+- Automatic monitoring once a day
 - Instant Telegram notifications when results are ready
 - Automatic PDF download and delivery
 - Base64 PDF decoding from embedded HTML responses
@@ -66,7 +66,7 @@ uv build
 6. **Base64 Decoding**: Extracts PDF content from embedded base64 data in HTML responses
 7. **Delivery**: Downloads PDF using authenticated session and sends directly via Telegram
 8. **Auto-cleanup**: Removes credential from monitoring after successful PDF delivery
-9. **Periodic Monitoring**: Continues checking every 30 minutes for remaining credentials
+9. **Periodic Monitoring**: Continues checking once a day for remaining credentials
 
 ## Release
 

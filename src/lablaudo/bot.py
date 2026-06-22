@@ -180,7 +180,7 @@ class LabBot:
             "*Como funciona:*\n"
             "1\\. Use /add para salvar suas credenciais do portal\n"
             "2\\. Você pode adicionar múltiplas credenciais\n"
-            "3\\. Eu verifico seus resultados a cada hora\n"
+            "3\\. Eu verifico seus resultados uma vez por dia\n"
             "4\\. Você será notificado quando os resultados estiverem prontos\n"
             "5\\. Cada credencial é removida automaticamente após o envio do PDF\n\n"
             "_Privacidade: suas credenciais são armazenadas de forma segura e usadas apenas para verificar seus resultados\\._"
@@ -214,7 +214,7 @@ class LabBot:
                 if exams_text:
                     msg += f"*Exames encontrados:*\n{exams_text}\n\n"
                 msg += (
-                    "Vou verificar seus resultados a cada hora e avisar quando estiverem prontos\\.\n"
+                    "Vou verificar seus resultados uma vez por dia e avisar quando estiverem prontos\\.\n"
                     "Use /add novamente para adicionar mais, ou /status para ver todos\\."
                 )
                 await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
@@ -505,11 +505,11 @@ class LabBot:
         self.scheduler.add_job(
             self.check_all_users,
             'interval',
-            minutes=60,
+            days=1,
             id='check_results'
         )
         self.scheduler.start()
-        logger.info("Scheduler started - checking every 60 minutes")
+        logger.info("Scheduler started - checking once a day")
     
     async def run(self):
         """Start the bot."""
