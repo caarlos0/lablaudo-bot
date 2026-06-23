@@ -60,12 +60,18 @@ class Database:
                     conn.commit()
             except sqlite3.Error:
                 pass
+            # Drop orphaned exam rows whose credential was deleted before
+            # foreign keys were enforced.
+            conn.execute(
+                "DELETE FROM exams WHERE credential_id NOT IN (SELECT id FROM credentials)"
+            )
             conn.commit()
     
     @contextmanager
     def get_connection(self):
-        """Get a database connection with automatic closing."""
+        """Get a database connection with foreign keys enabled and automatic closing."""
         conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
         try:
             yield conn
         finally:
