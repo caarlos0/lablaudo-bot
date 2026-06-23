@@ -6,7 +6,7 @@ import os
 import re
 import signal
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from telegram import BotCommand, Update
 from telegram.constants import ParseMode
@@ -57,6 +57,19 @@ _READY_KEYWORDS = {"disponível", "disponivel", "pronto", "liberado", "concluíd
 def _is_exam_ready(status: str) -> bool:
     """Check if an exam status indicates it's ready."""
     return status.strip().lower() in _READY_KEYWORDS
+
+
+_GIVE_UP_AFTER = timedelta(days=7)
+
+
+def _abandoned_exams(exams: list[ExamDetail], now: datetime) -> list[ExamDetail]:
+    """Return non-ready exams whose delivery estimate is over a week overdue."""
+    cutoff = now - _GIVE_UP_AFTER
+    return [
+        e
+        for e in exams
+        if e.expected_date and not _is_exam_ready(e.status) and e.expected_date < cutoff
+    ]
 
 
 def _format_exams_md(exams_rows: list[tuple], now: datetime | None = None, max_shown: int = 3) -> str:
@@ -334,6 +347,21 @@ class LabBot:
                     prev_status = self.db.get_credential_status(cred_id)
                     exam_rows = self.db.get_exams(cred_id)
                     summary = _format_exams_md(exam_rows, now)
+
+                    if not manual and _abandoned_exams(exams, now):
+                        msg = (
+                            f"🛑 {prefix}*Monitoramento interrompido*\n\n"
+                            f"{summary}\n\n"
+                            "Estes exames estão atrasados há mais de uma semana, "
+                            "então parei de verificar\\.\n"
+                            "Entre em contato com o laboratório e use /add para retomar\\."
+                        )
+                        await send_message(msg, parse_mode=ParseMode.MARKDOWN_V2)
+                        self.db.deactivate_credential(cred_id)
+                        logger.info(
+                            f"Gave up on credential {cred_id} (chat {chat_id}) - overdue > 1 week"
+                        )
+                        return "gave_up"
 
                     if manual and ready_exams:
                         pdf_url = crawler.get_pdf_link()

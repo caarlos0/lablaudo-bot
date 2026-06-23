@@ -31,6 +31,7 @@
 - **Auto-delivery**: Sends PDF files directly via Telegram
 - **Multiple credentials**: Each user/group can monitor several lab results simultaneously
 - **Auto-cleanup**: Removes individual credentials from monitoring after PDF delivery
+- **Give up on stuck exams**: Stops monitoring and deactivates a credential once an exam stays overdue for more than a week (notifies the chat); the daily "Atrasado" status clears automatically once the lab reschedules or delivers
 - **Group support**: Works in groups — credentials and results are scoped to the chat (DM or group)
 - **Startup check**: Runs full check for all users immediately when bot starts
 - **Periodic monitoring**: Continues checking once a day
