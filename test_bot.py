@@ -2,9 +2,28 @@
 """Test script for the Telegram bot functionality."""
 
 import asyncio
+import logging
 import os
+
+import httpx
+import pytest
+
 from lablaudo.bot import LabBot
 from lablaudo.database import Database
+
+
+def test_httpx_requests_do_not_log_bot_tokens(caplog: pytest.LogCaptureFixture) -> None:
+    """Keep Telegram authentication tokens out of request logs."""
+    caplog.set_level(logging.INFO)
+    token = "000000:synthetic-test-token"
+    transport = httpx.MockTransport(lambda request: httpx.Response(200))
+    with httpx.Client(transport=transport, trust_env=False) as client:
+        response = client.post(f"https://api.telegram.org/bot{token}/getMe")
+
+    assert response.status_code == 200
+    assert token not in caplog.text
+    logging.getLogger("lablaudo.bot").info("Monitoring completed")
+    assert "Monitoring completed" in caplog.text
 
 
 async def test_bot_components():
