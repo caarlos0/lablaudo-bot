@@ -1,0 +1,20 @@
+name: test
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  logging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v6.6.1
+        with:
+          python-version: "3.13"
+      - run: uv sync --locked
+      - run: uv run python -m pytest test_bot.py::test_httpx_requests_do_not_log_bot_tokens
+      - run: uvx ruff check --select E9,F63,F7,F82 src/lablaudo/bot.py test_bot.py
+      - run: uv build
